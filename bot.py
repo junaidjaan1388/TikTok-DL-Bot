@@ -101,7 +101,7 @@ async def cb_data(bot, update):
         await update.message.edit_text(
             text=ABOUT_TEXT,
             reply_markup=ABOUT_BUTTONS,
-            disable_web_page_preview=True
+            disable_web_page_preview=False
         )
     else:
         await update.message.delete()
@@ -110,7 +110,7 @@ async def cb_data(bot, update):
 async def start(bot, update):
     await update.reply_text(
         text=START_TEXT.format(update.from_user.mention),
-        disable_web_page_preview=True,
+        disable_web_page_preview=False,
         reply_markup=START_BUTTONS
     )
 
