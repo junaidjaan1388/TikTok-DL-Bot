@@ -117,7 +117,8 @@ async def start(bot, update):
 # Downloader for tiktok
 @xbot.on_message(filters.regex(pattern='.*http.*') & filters.private)
 async def _tiktok(bot, update):
-  url = update.text
+  web = "https://vt.tiktok.com"
+  url = web.update.text
   session = requests.Session()
   resp = session.head(url, allow_redirects=True)
   if not 'tiktok.com' in resp.url:
