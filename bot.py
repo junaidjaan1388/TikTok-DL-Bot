@@ -8,196 +8,95 @@ API_HASH = os.environ['API_HASH']
 APP_ID = int(os.environ['APP_ID'])
 BOT_TOKEN = os.environ['BOT_TOKEN']
 downloads = './downloads/{}/'
+import logging
+from telegram import Update
+from telegram.ext import ContextTypes
+from telegram.ext import filters, MessageHandler, ApplicationBuilder, CommandHandler
+import os
+import requests
 
-# Helper
-async def run_cmd(cmd: str) -> Tuple[str, str, int, int]:
-  args = shlex.split(cmd)
-  process = await asyncio.create_subprocess_exec(
-      *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-  )
-  stdout, stderr = await process.communicate()
-  return (
-      stdout.decode("utf-8", "replace").strip(),
-      stderr.decode("utf-8", "replace").strip(),
-      process.returncode,
-      process.pid,
-  )
-
-# Button
-START_TEXT = """
-Hai {}, Saya adalah TikTok-DL-Bot. Anda dapat mengunduh video/audio TikTok menggunakan bot ini. Kirimkan saya tautan tiktok yang ingin di unduh.
-
-Dibuat oleh @AnkiSatya
-"""
-HELP_TEXT = """
-- Kirimkan saya tautan tiktok
-- Pilih opsi yang anda inginkan
-- Saya akan mengunduhnya
-- Dan saya akan mengirim video/audio sesuai yang anda kirim
-
-Dibuat oleh @AnkiSatya
-"""
-ABOUT_TEXT = """
-- **Bot :** `TikTok DL Bot`
-- **Pembuat :** [𝔸𝕟𝕜𝕚 𝕊𝕒𝕥𝕪𝕒](https://t.me/AnkiSatya)
-- **Channel :** [𝕬𝖓𝖘𝖆𝖐𝖚 𝕭𝖔𝖙 𝕮𝖍𝖆𝖓𝖓𝖊𝖑](https://t.me/ansakubotchannel)
-- **Repo :** [Github](https://github.com/Ansaku/TikTok-DL-Bot)
-- **Donasi :** [Saweria](https://saweria.co/ansaku)
-"""
-START_BUTTONS = InlineKeyboardMarkup(
-        [[
-        InlineKeyboardButton('Channel', url='https://t.me/ansakubotchannel'),
-        InlineKeyboardButton('Author', url='https://t.me/AnkiSatya')
-        ],[
-        InlineKeyboardButton('Help', callback_data='help'),
-        InlineKeyboardButton('About', callback_data='about'),
-        InlineKeyboardButton('Close', callback_data='close')
-        ]]
-    )
-HELP_BUTTONS = InlineKeyboardMarkup(
-        [[
-        InlineKeyboardButton('Home', callback_data='home'),
-        InlineKeyboardButton('About', callback_data='about'),
-        InlineKeyboardButton('Close', callback_data='close')
-        ]]
-    )
-ABOUT_BUTTONS = InlineKeyboardMarkup(
-        [[
-        InlineKeyboardButton('Home', callback_data='home'),
-        InlineKeyboardButton('Help', callback_data='help'),
-        InlineKeyboardButton('Close', callback_data='close')
-        ]]
-    )
-
-DL_BUTTONS=[
-    [
-        InlineKeyboardButton('No Watermark', callback_data='nowm'),
-        InlineKeyboardButton('Watermark', callback_data='wm'),
-    ],
-    [InlineKeyboardButton('Audio', callback_data='audio')],
-]
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.DEBUG
+)
 
 
-# Running bot
-xbot = Client('TikTok-DL-Bot', api_id=APP_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+async def download(link):
+    headers = {
+        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36',
+    }
+    video_url = link
+
+    page_html = requests.get(video_url, headers=headers)
+    main = page_html.content.decode('utf-8')
 
 
-# Start
-@xbot.on_callback_query()
-async def cb_data(bot, update):
-    if update.data == "home":
-        await update.message.edit_text(
-            text=START_TEXT.format(update.from_user.mention),
-            reply_markup=START_BUTTONS,
-            disable_web_page_preview=True
-        )
-    elif update.data == "help":
-        await update.message.edit_text(
-            text=HELP_TEXT,
-            reply_markup=HELP_BUTTONS,
-            disable_web_page_preview=True
-        )
-    elif update.data == "about":
-        await update.message.edit_text(
-            text=ABOUT_TEXT,
-            reply_markup=ABOUT_BUTTONS,
-            disable_web_page_preview=False
-        )
-    else:
-        await update.message.delete()
+    startx = main.find('{"url":"')
+    print(startx)
+    end = main.find('&mime_type')
+    print(end)
 
-@xbot.on_message(filters.private & filters.command(["start"]))
-async def start(bot, update):
-    await update.reply_text(
-        text=START_TEXT.format(update.from_user.mention),
-        disable_web_page_preview=False,
-        reply_markup=START_BUTTONS
-    )
+    link = f'{str(main)[startx:end]}'
+    link_m = link.replace("u002F", "")
+    link_m = link_m.replace('{"url":"', "")
+    x = link_m.find("?")
+    link_m = link_m[:x]
+    link_m = link_m.replace('\\', "/")
+    print(str(link_m))
 
-# Downloader for tiktok
-@xbot.on_message(filters.regex(pattern='.*http.*') & filters.private)
-async def _tiktok(bot, update):
-  web = "https://vt.tiktok.com"
-  url = web.update.text
-  session = requests.Session()
-  resp = session.head(url, allow_redirects=True)
-  if not 'tiktok.com' in resp.url:
-    return
-  await update.reply('Pilih opsi di bawah ini', True, reply_markup=InlineKeyboardMarkup(DL_BUTTONS))
+    link = link.replace('{"url":"', "")
 
-# Callbacks
-@xbot.on_callback_query()
-async def _callbacks(bot, cb: CallbackQuery):
-  if cb.data == 'nowm':
-    dirs = downloads.format(uuid.uuid4().hex)
-    os.makedirs(dirs)
-    cbb = cb
-    update = cbb.message.reply_to_message
-    await cb.message.delete()
-    url = update.text
-    session = requests.Session()
-    resp = session.head(url, allow_redirects=True)
-    if '?' in resp.url:
-      tt = resp.url.split('?', 1)[0]
-    else:
-      tt = resp.url
-    ttid = dirs+tt.split('/')[-1]
-    r = requests.get('https://api.reiyuura.me/api/dl/tiktok?url='+tt+web)
-    result = r.text
-    rs = json.loads(result)
-    link = rs['result']['nowm']
-    resp = session.head(link, allow_redirects=True)
-    r = requests.get(resp.url, allow_redirects=True)
-    open(f'{ttid}.mp4', 'wb').write(r.content)
-    await bot.send_video(update.chat.id, f'{ttid}.mp4',)
-    shutil.rmtree(dirs)
-  elif cb.data == 'wm':
-    dirs = downloads.format(uuid.uuid4().hex)
-    os.makedirs(dirs)
-    cbb = cb
-    update = cbb.message.reply_to_message
-    await cb.message.delete()
-    url = update.text
-    session = requests.Session()
-    resp = session.head(url, allow_redirects=True)
-    if '?' in resp.url:
-      tt = resp.url.split('?', 1)[0]
-    else:
-      tt = resp.url
-    ttid = dirs+tt.split('/')[-1]
-    r = requests.get('https://api.reiyuura.me/api/dl/tiktok?url='+tt)
-    result = r.text
-    rs = json.loads(result)
-    link = rs['result']['wm']
-    resp = session.head(link, allow_redirects=True)
-    r = requests.get(resp.url, allow_redirects=True)
-    open(f'{ttid}.mp4', 'wb').write(r.content)
-    await bot.send_video(update.chat.id, f'{ttid}.mp4',)
-    shutil.rmtree(dirs)
-  elif cb.data == 'audio':
-    dirs = downloads.format(uuid.uuid4().hex)
-    os.makedirs(dirs)
-    cbb = cb
-    update = cbb.message.reply_to_message
-    await cb.message.delete()
-    url = update.text
-    session = requests.Session()
-    resp = session.head(url, allow_redirects=True)
-    if '?' in resp.url:
-      tt = resp.url.split('?', 1)[0]
-    else:
-      tt = resp.url
-    ttid = dirs+tt.split('/')[-1]
-    r = requests.get('https://api.reiyuura.me/api/dl/tiktok?url='+tt)
-    result = r.text
-    rs = json.loads(result)
-    link = rs['result']['wm']
-    resp = session.head(link, allow_redirects=True)
-    r = requests.get(resp.url, allow_redirects=True)
-    open(f'{ttid}.mp4', 'wb').write(r.content)
-    cmd = f'ffmpeg -i "{ttid}.mp4" -vn -ar 44100 -ac 2 -ab 192 -f mp3 "{ttid}.mp3"'
-    await run_cmd(cmd)
-    await bot.send_audio(update.chat.id, f'{ttid}.mp3',)
-    shutil.rmtree(dirs)
+    url = link_m
+    downloaded_obj = requests.get(url, headers=headers)
 
-xbot.run()
+    with open("tok.mp4", "wb") as file:
+        file.write(downloaded_obj.content)
+
+
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.DEBUG
+)
+
+
+# working
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    linkx = update.message.text
+    # linkx = update.channel_post.text
+    if "tiktok" in linkx:
+        #print("before  the async")
+
+        await download(linkx)
+
+        # BAD CODE TODO
+        try:
+            #print("MAIN SEND")
+            await context.bot.send_video(chat_id=update.effective_chat.id, video=open("tok.mp4", 'rb'),
+                                         supports_streaming=True, caption="", read_timeout=100, write_timeout=100,
+                                         connect_timeout=100)
+        except Exception as e:
+            #print(f"MAIN SEND E{e}")
+
+        
+        os.remove("tok.mp4")
+        # os.remove("tok_admin.mp4")
+
+
+# working part
+async def commd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=update.effective_chat.id,
+                                   text="Add me in any group. Make me an Admin & I Will send you viewable tiktoks")
+
+
+if __name__ == '__main__':
+    token = "TG_TOKEN_FROM_BOT_FATHER"
+    application = ApplicationBuilder().token(token).build()
+
+    commands = CommandHandler('start', commd)
+    links = MessageHandler(filters.TEXT, start)
+    # on different commands - answer in Telegram
+    application.add_handler(commands)
+    application.add_handler(links)
+
+    application.run_polling()
+
